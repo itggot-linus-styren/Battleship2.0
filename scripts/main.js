@@ -411,6 +411,7 @@ var BattleshipMapNode = /** @class */ (function () {
 var BattleshipMap = /** @class */ (function () {
     function BattleshipMap(canvas, ctx) {
         this.BS = BattleshipMap.NodeState;
+        this.gameover = false;
         this.canvas = canvas;
         this.ctx = ctx;
         this.mygame = [];
@@ -455,7 +456,6 @@ var BattleshipMap = /** @class */ (function () {
     BattleshipMap.prototype.renderMyBoard = function () {
         var dx = this.canvas.width / GameWidth;
         var dy = this.canvas.height / GameHeight;
-        console.log("rendering my board");
         for (var y = 0; y < GameHeight; y++) {
             for (var x = 0; x < GameWidth; x++) {
                 var fontColour = "black";
@@ -474,6 +474,7 @@ var BattleshipMap = /** @class */ (function () {
                         break;
                     case this.BS.ShipSunk:
                         this.ctx.fillStyle = "red";
+                        fontColour = "white";
                         break;
                     default:
                         console.error("i don't know about: " + this.othergame[y][x].state);
@@ -494,7 +495,6 @@ var BattleshipMap = /** @class */ (function () {
     BattleshipMap.prototype.renderOtherBoard = function () {
         var dx = this.canvas.width / GameWidth;
         var dy = this.canvas.height / GameHeight;
-        console.log("rendering other board");
         for (var y = 0; y < GameHeight; y++) {
             for (var x = 0; x < GameWidth; x++) {
                 var showValue = false;
@@ -504,12 +504,19 @@ var BattleshipMap = /** @class */ (function () {
                     case this.BS.NodeNormal:
                         this.ctx.fillStyle = "black";
                         overrideValue = false;
+                        if (this.gameover) {
+                            fontColour = "white";
+                            showValue = true;
+                        }
                         break;
                     case this.BS.ShipMiss:
                         this.ctx.fillStyle = "blue";
                         break;
                     case this.BS.ShipHit:
                         this.ctx.fillStyle = "orange";
+                        if (this.gameover) {
+                            showValue = true;
+                        }
                         break;
                     case this.BS.ShipSunk:
                         this.ctx.fillStyle = "red";
@@ -537,7 +544,6 @@ var BattleshipMap = /** @class */ (function () {
     BattleshipMap.prototype.renderPlacement = function () {
         var dx = this.canvas.width / GameWidth;
         var dy = this.canvas.height / GameHeight;
-        //console.log(JSON.stringify(this.mygame));
         for (var y = 0; y < GameHeight; y++) {
             for (var x = 0; x < GameWidth; x++) {
                 var fontColour = "black";
@@ -588,7 +594,7 @@ var BattleshipMap = /** @class */ (function () {
     })(NodeState = BattleshipMap.NodeState || (BattleshipMap.NodeState = {}));
 })(BattleshipMap || (BattleshipMap = {}));
 var AppInfo = {
-    //	Wss: true,
+    Wss: true,
     AppId: "ac485b10-6820-4627-b28b-99364b5ea8fe",
     AppVersion: "1.0"
 };
@@ -732,6 +738,9 @@ var Battleship = /** @class */ (function (_super) {
         }
         return new Point(0, 0);
     };
+    Battleship.prototype.CheckBounds = function (y, x) {
+        return !(y < 0 || x < 0 || y >= GameHeight || x >= GameWidth);
+    };
     Battleship.prototype.UpdateSelectionPlacement = function () {
         var _this = this;
         this.offlinePlacement = JSON.parse(JSON.stringify(this.prevPlacement));
@@ -751,10 +760,12 @@ var Battleship = /** @class */ (function (_super) {
         var x = this.selectionPos.x;
         for (var i = 0; i < ship.length; i++) {
             if (this.selectionRot) {
-                this.offlinePlacement[y + i][x] = ship[i];
+                if (this.CheckBounds(y + i, x))
+                    this.offlinePlacement[y + i][x] = ship[i];
             }
             else {
-                this.offlinePlacement[y][x + i] = ship[i];
+                if (this.CheckBounds(y, x + i))
+                    this.offlinePlacement[y][x + i] = ship[i];
             }
         }
         var shipBoard = JSON.parse(JSON.stringify(this.offlinePlacement));
@@ -813,7 +824,6 @@ var Battleship = /** @class */ (function (_super) {
             board[y][x] = -1;
             node.state = this.BS.ShipMiss;
         }
-        console.log(JSON.stringify(node));
         this.aiBoard = board;
         this.aiPlacement = placement;
     };
@@ -899,7 +909,7 @@ var Battleship = /** @class */ (function (_super) {
                         var value = _this.otherPlayer.getCustomProperty("board")[my][mx];
                         if (value > 1 || value < 0)
                             return;
-                        _this.sendMessage("attack/" + my + "/" + mx);
+                        _this.SendGameEvent(Messages.Attack, my + "/" + mx);
                     }
                     else {
                         var value = _this.aiBoard[my][mx];
@@ -939,11 +949,9 @@ var Battleship = /** @class */ (function (_super) {
         }
     };
     Battleship.prototype.onError = function (errorCode, errorMsg) {
-        this.output("Error " + errorCode + ": " + errorMsg);
         _super.prototype.onError.call(this, errorCode, errorMsg);
     };
     Battleship.prototype.onOperationResponse = function (errorCode, errorMsg, code, content) {
-        this.output("Error " + errorCode + ": " + errorMsg);
         var LBCE = Photon.LoadBalancing.Constants.ErrorCode;
         switch (errorCode) {
             case LBCE.NoRandomMatchFound:
@@ -1000,8 +1008,9 @@ var Battleship = /** @class */ (function (_super) {
         return nodes.length > 0;
     };
     Battleship.prototype.StartGame = function () {
-        this.sendMessage("gamestarted");
-        this.sendMessage("doneturn");
+        this.map.gameover = false;
+        this.SendGameEvent(Messages.Gamestarted, null);
+        this.SendGameEvent(Messages.Doneturn, null);
     };
     Battleship.prototype.SetStateOfMap = function (board, placement, game) {
         for (var y = 0; y < GameHeight; y++) {
@@ -1091,7 +1100,7 @@ var Battleship = /** @class */ (function (_super) {
                         element.setCustomProperty("myturn", true);
                     }
                 });
-                _this.sendMessage("doneturn");
+                _this.SendGameEvent(Messages.Doneturn, null);
             }
         }, 1000);
     };
@@ -1140,118 +1149,112 @@ var Battleship = /** @class */ (function (_super) {
     Battleship.prototype.onEvent = function (code, content, actorNr) {
         var _this = this;
         switch (code) {
-            case 1:
-                var mess = content.message;
-                var sender = content.senderName;
-                if (actorNr) {
-                    if (mess == "ready") {
-                        if (this.myActor().actorNr == actorNr) {
-                            document.querySelector("#msg").innerHTML = "Waiting for other player to become ready";
-                        }
-                        else {
-                            document.querySelector("#msg").innerHTML = "Other player is ready!";
-                        }
-                        if (this.myActor().actorNr == this.myRoom().masterClientId) {
-                            var readyCount = 0;
-                            this.myRoomActorsArray().forEach(function (element) {
-                                if (element.getCustomProperty("isReady"))
-                                    readyCount++;
-                            });
-                            if (readyCount == 2) {
-                                this.StartGame();
-                                this.myRoomActorsArray().forEach(function (element) {
-                                    if (element.actorNr == _this.myActor().actorNr) {
-                                        element.setCustomProperty("myturn", true);
-                                    }
-                                    else {
-                                        element.setCustomProperty("myturn", false);
-                                    }
-                                });
+            case Messages.Ready:
+                if (this.myActor().actorNr == actorNr) {
+                    document.querySelector("#msg").innerHTML = "Waiting for other player to become ready";
+                }
+                else {
+                    document.querySelector("#msg").innerHTML = "Other player is ready!";
+                }
+                if (this.myActor().actorNr == this.myRoom().masterClientId) {
+                    var readyCount = 0;
+                    this.myRoomActorsArray().forEach(function (element) {
+                        if (element.getCustomProperty("isReady"))
+                            readyCount++;
+                    });
+                    if (readyCount == 2) {
+                        this.StartGame();
+                        this.myRoomActorsArray().forEach(function (element) {
+                            if (element.actorNr == _this.myActor().actorNr) {
+                                element.setCustomProperty("myturn", true);
                             }
-                        }
-                    }
-                    else if (mess == "gamestarted") {
-                        document.querySelector("#msg").innerHTML = "Game has started";
-                        this.gameStarted = true;
-                    }
-                    else if (mess == "doneturn") {
-                        if (this.HasWon()) {
-                            this.sendMessage("gameover");
-                        }
-                        else {
-                            if (!this.myActor().getCustomProperty("myturn")) {
-                                this.ignoreInput = true;
+                            else {
+                                element.setCustomProperty("myturn", false);
                             }
-                            setTimeout(function () {
-                                _this.canMove = _this.myActor().getCustomProperty("myturn");
-                                _this.ignoreInput = !_this.canMove;
-                                document.querySelector("#msg").innerHTML = _this.canMove ? "Your turn, make a move!" : "Wait for your turn...";
-                            }, 1000);
-                        }
-                    }
-                    else if (mess == "gameover") {
-                        this.canMove = false;
-                        this.gameOver = true;
-                        if (actorNr == this.myActor().actorNr) {
-                            document.querySelector("#msg").innerHTML = "You won! :D";
-                        }
-                        else {
-                            document.querySelector("#msg").innerHTML = "You lost! :(";
-                        }
-                        {
-                            var board = this.otherPlayer.getCustomProperty("board");
-                            var placement = this.otherPlayer.getCustomProperty("placement");
-                            this.SetStateOfMap(board, placement, this.map.othergame);
-                            board = this.myActor().getCustomProperty("board");
-                            placement = this.myActor().getCustomProperty("placement");
-                            this.SetStateOfMap(board, placement, this.map.mygame);
-                        }
-                    }
-                    else if (mess.split("/")[0] == "attack") {
-                        if (actorNr == this.myActor().actorNr) {
-                            var board = this.otherPlayer.getCustomProperty("board");
-                            var placement = this.otherPlayer.getCustomProperty("placement");
-                            var y = +mess.split("/")[1];
-                            var x = +mess.split("/")[2];
-                            var node = this.map.othergame[y][x];
-                            if (board[y][x] == 1) {
-                                board[y][x] = 2;
-                                if (!this.CheckSunken(y, x, this.otherPlayer.actorNr, board, placement)) {
-                                    node.state = this.BS.ShipHit;
-                                }
-                            }
-                            else if (board[y][x] == 0) {
-                                board[y][x] = -1;
-                                node.state = this.BS.ShipMiss;
-                            }
-                            this.otherPlayer.setCustomProperty("placement", placement);
-                            this.otherPlayer.setCustomProperty("board", board);
-                        }
-                        else {
-                            var board = this.myActor().getCustomProperty("board");
-                            var placement = this.myActor().getCustomProperty("placement");
-                            var y = +mess.split("/")[1];
-                            var x = +mess.split("/")[2];
-                            var node = this.map.mygame[y][x];
-                            if (board[y][x] == 1) {
-                                board[y][x] = 2;
-                                if (!this.CheckSunken(y, x, this.myActor().actorNr, board, placement)) {
-                                    node.state = this.BS.ShipHit;
-                                }
-                            }
-                            else if (board[y][x] == 0) {
-                                board[y][x] = -1;
-                                node.state = this.BS.ShipMiss;
-                            }
-                            this.myActor().setCustomProperty("placement", placement);
-                            this.myActor().setCustomProperty("board", board);
-                        }
+                        });
                     }
                 }
-                else
-                    this.output(sender + ": " + mess);
                 break;
-            default:
+            case Messages.Gamestarted:
+                document.querySelector("#msg").innerHTML = "Game has started";
+                this.gameStarted = true;
+                break;
+            case Messages.Doneturn:
+                if (this.HasWon()) {
+                    this.SendGameEvent(Messages.Gameover, null);
+                }
+                else {
+                    if (!this.myActor().getCustomProperty("myturn")) {
+                        this.ignoreInput = true;
+                    }
+                    setTimeout(function () {
+                        if (_this.gameOver)
+                            return;
+                        _this.canMove = _this.myActor().getCustomProperty("myturn");
+                        _this.ignoreInput = !_this.canMove;
+                        document.querySelector("#msg").innerHTML = _this.canMove ? "Your turn, make a move!" : "Wait for your turn...";
+                    }, 1000);
+                }
+                break;
+            case Messages.Gameover:
+                this.canMove = false;
+                this.gameOver = true;
+                this.map.gameover = true;
+                if (actorNr == this.myActor().actorNr) {
+                    document.querySelector("#msg").innerHTML = "You won! :D";
+                }
+                else {
+                    document.querySelector("#msg").innerHTML = "You lost! :(";
+                }
+                {
+                    var board = this.otherPlayer.getCustomProperty("board");
+                    var placement = this.otherPlayer.getCustomProperty("placement");
+                    this.SetStateOfMap(board, placement, this.map.othergame);
+                    board = this.myActor().getCustomProperty("board");
+                    placement = this.myActor().getCustomProperty("placement");
+                    this.SetStateOfMap(board, placement, this.map.mygame);
+                }
+                break;
+            case Messages.Attack:
+                if (actorNr == this.myActor().actorNr) {
+                    var board = this.otherPlayer.getCustomProperty("board");
+                    var placement = this.otherPlayer.getCustomProperty("placement");
+                    var y = +content.split("/")[0];
+                    var x = +content.split("/")[1];
+                    var node = this.map.othergame[y][x];
+                    if (board[y][x] == 1) {
+                        board[y][x] = 2;
+                        if (!this.CheckSunken(y, x, this.otherPlayer.actorNr, board, placement)) {
+                            node.state = this.BS.ShipHit;
+                        }
+                    }
+                    else if (board[y][x] == 0) {
+                        board[y][x] = -1;
+                        node.state = this.BS.ShipMiss;
+                    }
+                    this.otherPlayer.setCustomProperty("placement", placement);
+                    this.otherPlayer.setCustomProperty("board", board);
+                }
+                else {
+                    var board = this.myActor().getCustomProperty("board");
+                    var placement = this.myActor().getCustomProperty("placement");
+                    var y = +content.split("/")[0];
+                    var x = +content.split("/")[1];
+                    var node = this.map.mygame[y][x];
+                    if (board[y][x] == 1) {
+                        board[y][x] = 2;
+                        if (!this.CheckSunken(y, x, this.myActor().actorNr, board, placement)) {
+                            node.state = this.BS.ShipHit;
+                        }
+                    }
+                    else if (board[y][x] == 0) {
+                        board[y][x] = -1;
+                        node.state = this.BS.ShipMiss;
+                    }
+                    this.myActor().setCustomProperty("placement", placement);
+                    this.myActor().setCustomProperty("board", board);
+                }
+                break;
         }
     };
     Battleship.prototype.onStateChange = function (state) {
@@ -1260,17 +1263,12 @@ var Battleship = /** @class */ (function (_super) {
         var stateText = document.getElementById("statetxt");
         switch (state) {
             case LBC.State.JoinedLobby:
-                this.output("Random Game...");
                 this.joinRandomRoom();
                 break;
             default:
                 break;
         }
-        console.log(LBC.StateToName(state));
         stateText.textContent = LBC.StateToName(state);
-    };
-    Battleship.prototype.onJoinRoom = function () {
-        this.output("Game " + this.myRoom().name + " joined");
     };
     Battleship.prototype.PlaceShip = function (board, ship, y, x, rot) {
         for (var i = 0; i < ship.length; i++) {
@@ -1331,15 +1329,16 @@ var Battleship = /** @class */ (function (_super) {
         }
         else {
             document.querySelector("#msg").innerHTML = "Paired with other player";
-            // TODO: make sure this code is only executed once
         }
         document.querySelector("#ready").addEventListener("click", function () {
+            if (_this.gameStarted)
+                return;
             _this.canChangePlacement = false;
             if (!_this.playVsAI) {
                 _this.myActor().setCustomProperty("placement", _this.offlinePlacement);
                 _this.myActor().setCustomProperty("board", _this.offlineBoard);
                 _this.myActor().setCustomProperty("isReady", true);
-                _this.sendMessage("ready");
+                _this.SendGameEvent(Messages.Ready, null);
             }
             else {
                 document.querySelector("#msg").innerHTML = "Your turn, make a move!";
@@ -1347,6 +1346,7 @@ var Battleship = /** @class */ (function (_super) {
                 _this.canMove = true;
             }
         });
+        this.ResetMap();
         var placement = this.PlaceShips();
         this.canChangePlacement = true;
         if (this.playVsAI) {
@@ -1397,7 +1397,6 @@ var Battleship = /** @class */ (function (_super) {
     };
     Battleship.prototype.onActorJoin = function (actor) {
         var _this = this;
-        this.output("actor " + actor.actorNr + " joined");
         if (actor.actorNr > 1) {
             this.StartGamePlacement();
             this.myRoomActorsArray().forEach(function (element) {
@@ -1407,19 +1406,8 @@ var Battleship = /** @class */ (function (_super) {
             });
         }
     };
-    Battleship.prototype.onActorLeave = function (actor) {
-        this.output("actor " + actor.actorNr + " left");
-    };
-    Battleship.prototype.sendMessage = function (message) {
-        try {
-            this.raiseEvent(1, { message: message, senderName: "user" + this.myActor().actorNr }, { receivers: Photon.LoadBalancing.Constants.ReceiverGroup.All });
-        }
-        catch (err) {
-            this.output("error: " + err.message);
-        }
-    };
-    Battleship.prototype.output = function (str, color) {
-        console.log(str);
+    Battleship.prototype.SendGameEvent = function (event, data) {
+        this.raiseEvent(event, data, { receivers: Photon.LoadBalancing.Constants.ReceiverGroup.All });
     };
     return Battleship;
 }(Photon.LoadBalancing.LoadBalancingClient));

@@ -14,15 +14,17 @@ class BattleshipMap {
 
     public mygame : BattleshipMapNode[][];
     public othergame : BattleshipMapNode[][];
+    public gameover : boolean;
 
     private canvas : HTMLCanvasElement;
     private ctx : CanvasRenderingContext2D;
 
     private BS : typeof BattleshipMap.NodeState = BattleshipMap.NodeState;
 
-    private grid : HTMLCanvasElement;
+    private grid : HTMLCanvasElement;    
 
     constructor(canvas, ctx) {
+        this.gameover = false;
         this.canvas = canvas;
         this.ctx = ctx;
         this.mygame = [];
@@ -75,8 +77,6 @@ class BattleshipMap {
     renderMyBoard() {
         let dx = this.canvas.width / GameWidth;
         let dy = this.canvas.height / GameHeight;
-
-        console.log("rendering my board");
         
         for (let y = 0; y < GameHeight; y++) {
             for (let x = 0; x < GameWidth; x++) {
@@ -121,8 +121,6 @@ class BattleshipMap {
     renderOtherBoard() {
         let dx = this.canvas.width / GameWidth;
         let dy = this.canvas.height / GameHeight;
-
-        console.log("rendering other board");
         
         for (let y = 0; y < GameHeight; y++) {
             for (let x = 0; x < GameWidth; x++) {
@@ -132,13 +130,20 @@ class BattleshipMap {
                 switch (this.othergame[y][x].state) {
                     case this.BS.NodeNormal:
                         this.ctx.fillStyle = "black";
-                        overrideValue = false;                        
+                        overrideValue = false;
+                        if (this.gameover) {
+                            fontColour = "white";
+                            showValue = true;
+                        }
                         break;
                     case this.BS.ShipMiss:
                         this.ctx.fillStyle = "blue";
                         break;                        
                     case this.BS.ShipHit:
                         this.ctx.fillStyle = "orange";
+                        if (this.gameover) {
+                            showValue = true;
+                        }
                         break;
                     case this.BS.ShipSunk:                        
                         this.ctx.fillStyle = "red";
@@ -170,8 +175,6 @@ class BattleshipMap {
     renderPlacement() {
         let dx = this.canvas.width / GameWidth;
         let dy = this.canvas.height / GameHeight;
-
-        //console.log(JSON.stringify(this.mygame));
         
         for (let y = 0; y < GameHeight; y++) {
             for (let x = 0; x < GameWidth; x++) {

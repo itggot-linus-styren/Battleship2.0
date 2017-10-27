@@ -177,6 +177,10 @@ class Battleship extends Photon.LoadBalancing.LoadBalancingClient {
         return new Point(0, 0);
     }
 
+    CheckBounds(y : number, x : number) : boolean {
+        return !(y < 0 || x < 0 || y >= GameHeight || x >= GameWidth);
+    }
+
     UpdateSelectionPlacement() {
         this.offlinePlacement = JSON.parse(JSON.stringify(this.prevPlacement));
         let ship;
@@ -194,9 +198,11 @@ class Battleship extends Photon.LoadBalancing.LoadBalancingClient {
         let x = this.selectionPos.x;
         for (let i = 0; i < ship.length; i++) {
             if (this.selectionRot) {
-                this.offlinePlacement[y+i][x] = ship[i];
+                if (this.CheckBounds(y+i, x))
+                    this.offlinePlacement[y+i][x] = ship[i];
             } else {
-                this.offlinePlacement[y][x+i] = ship[i];
+                if (this.CheckBounds(y, x+i))
+                    this.offlinePlacement[y][x+i] = ship[i];
             }
         }
         let shipBoard = JSON.parse(JSON.stringify(this.offlinePlacement));     
@@ -240,7 +246,7 @@ class Battleship extends Photon.LoadBalancing.LoadBalancingClient {
         this.offlineBoard = [];
         this.offlinePlacement = [];
         this.aiBoard = [];
-        this.aiPlacement = [];
+        this.aiPlacement = [];        
     }
 
     AiAttack(pos : Point) {
@@ -258,7 +264,6 @@ class Battleship extends Photon.LoadBalancing.LoadBalancingClient {
             board[y][x] = -1;
             node.state = this.BS.ShipMiss;
         }
-        console.log(JSON.stringify(node));
         this.aiBoard = board;
         this.aiPlacement = placement;
     }
@@ -344,7 +349,7 @@ class Battleship extends Photon.LoadBalancing.LoadBalancingClient {
                     if (!this.playVsAI) {
                         let value = this.otherPlayer.getCustomProperty("board")[my][mx];
                         if (value > 1 || value < 0) return;
-                        this.SendGameEvent(Messages.Attack, new Point(mx, my));
+                        this.SendGameEvent(Messages.Attack, my + "/" + mx);
                     } else {
                         let value = this.aiBoard[my][mx];
                         if (value > 1 || value < 0) return;
@@ -438,6 +443,7 @@ class Battleship extends Photon.LoadBalancing.LoadBalancingClient {
     }
 
     StartGame() {
+        this.map.gameover = false;
         this.SendGameEvent(Messages.Gamestarted, null);
         this.SendGameEvent(Messages.Doneturn, null);
     }
@@ -604,6 +610,7 @@ class Battleship extends Photon.LoadBalancing.LoadBalancingClient {
             case Messages.Gamestarted:
                 document.querySelector("#msg").innerHTML = "Game has started";
                 this.gameStarted = true;
+                break;
             case Messages.Doneturn:                       
                 if (this.HasWon()) {
                     this.SendGameEvent(Messages.Gameover, null);
@@ -612,14 +619,17 @@ class Battleship extends Photon.LoadBalancing.LoadBalancingClient {
                         this.ignoreInput = true;
                     }
                     setTimeout(() => {
+                        if (this.gameOver) return;
                         this.canMove = this.myActor().getCustomProperty("myturn");
                         this.ignoreInput = !this.canMove;
                         document.querySelector("#msg").innerHTML = this.canMove ? "Your turn, make a move!" : "Wait for your turn...";
                     }, 1000);
                 }
+                break;
             case Messages.Gameover:
                 this.canMove = false;
                 this.gameOver = true;
+                this.map.gameover = true;
                 if (actorNr == this.myActor().actorNr) {
                     document.querySelector("#msg").innerHTML = "You won! :D";
                 } else {
@@ -634,7 +644,7 @@ class Battleship extends Photon.LoadBalancing.LoadBalancingClient {
                     placement = this.myActor().getCustomProperty("placement");
                     this.SetStateOfMap(board, placement, this.map.mygame);
                 }
-
+                break;
             case Messages.Attack:
                 if (actorNr == this.myActor().actorNr) {
                     let board = this.otherPlayer.getCustomProperty("board");
@@ -670,7 +680,8 @@ class Battleship extends Photon.LoadBalancing.LoadBalancingClient {
                     }
                     this.myActor().setCustomProperty("placement", placement);
                     this.myActor().setCustomProperty("board", board);
-                }        
+                }
+                break;
             }
     }
 
@@ -685,7 +696,6 @@ class Battleship extends Photon.LoadBalancing.LoadBalancingClient {
             default:
                 break;
         }
-        console.log(LBC.StateToName(state));
         stateText.textContent = LBC.StateToName(state);
     }
 
