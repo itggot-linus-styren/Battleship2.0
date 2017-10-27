@@ -1,0 +1,52 @@
+html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.wrapper {
+    display: flex;
+    flex-direction: row;
+}
+
+table {
+    border-collapse: collapse;
+    table-layout: fixed;
+    width:400px;
+    height:400px;
+    margin: 10px;
+}
+
+table, td {
+    border: 1px solid black;
+    line-height: 0;
+}
+
+.active {
+    color: white;
+    background: black;
+}
+
+.hit {
+    background:orange;
+}
+
+.sunk {
+    background: red;
+}
+
+.miss {
+    background: blue;
+}
+
+.selected {
+    background: green;
+}
+
+.invalidselect {
+    background: purple;
+}
+
+#gamecanvas {
+    float: left;
+}

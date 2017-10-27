@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title>TypeScript HTML App</title>
+    <link rel="stylesheet" media="all" href="css/style.css" />
+    <script type="text/javascript" src="Photon/3rdparty/swfobject.js"></script>
+    <script type="text/javascript" src="Photon/3rdparty/web_socket.js"></script>
+    <script type="text/javascript" src="Photon/Photon-Javascript_SDK.js"></script>
+    <script type="text/javascript" src="./scripts/main.js"></script>
+    <script type="text/javascript">
+        WEB_SOCKET_SWF_LOCATION = "Photon/3rdparty/WebSocketMain.swf";
+        // Set this to dump debug message from Flash to console.log:
+        WEB_SOCKET_DEBUG = true;
+    </script>
+</head>
+<body>
+    <h1>Battleship</h1>
+    <div id="msg">Waiting for other player...</div>
+    <button id="playvsai">Play vs AI</button>
+    <button id="ready">Set ready</button>
+    <canvas id="gamecanvas" width="400" height="400"></canvas>    
+    <div id="statetxt">
+        undef
+    </div>
+</body>
+</html>
